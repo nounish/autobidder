@@ -1,0 +1,13 @@
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+broadcast/
+tmp/
+
+# Dotenv file
+.env
+
+# Editor files
+.vscode
