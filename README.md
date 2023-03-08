@@ -43,8 +43,8 @@ All calls to `bid()` and `withdraw()` are refunded gas.
 
 **If an auction is won**  
 
-After the auction has settled, call `withdraw(uint256 nounId)` with the given
-token id that was won to send a tip to the address that placed the winning bid.
+After the auction has settled, call `withdraw(uint256)` with the given
+token id that was won withdraw any tokens and send a tip to the address that placed the winning bid.
 
 ### As a contract owner
 
@@ -58,6 +58,10 @@ auction.
 If this contract wins `withdraw()` can be called after the auction is settled and
 a tip will be sent to the last caller of `bid()`.
 
+## Deploy
+
+To deploy your own Bidder call `clone()` on the contract deployed at address `0x9d3496639FBD68A88718425f080dCe178c8Bf2D6` passing in your desired config.
+
 ## Config
 
 `t` - address of the ERC721 token at auction  
@@ -68,8 +72,9 @@ a tip will be sent to the last caller of `bid()`.
 
 `maxBid`: `max bid in wei`  
 `minBid`: `min bid in wei`  
+`bidWindow`: `seconds that a bid can be placed before an auction ends`  
 `tip`: `tip in wei`  
-`receiver`: `address to transfer tokens won at auction`  
+`receiver`: `address to transfer tokens won at auction`
 
 ## Version
 

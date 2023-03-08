@@ -3,7 +3,7 @@
 /**
  * @title Federation AutoBidder v0.1
  * @author wiz :- https://twitter.com/0xWiz_
- * @notice MEV based bidder for Nouns style auctions
+ * @notice An onchain bidder for Nouns style auctions
  *
  * ~~~
  * <<< ⌐◨-◨ >>>

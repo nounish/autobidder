@@ -4,3 +4,4 @@ nouns-contracts/=lib/nouns-monorepo/packages/nouns-contracts/contracts/
 openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/
 @openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
 @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
+solady/=lib/solady/src/

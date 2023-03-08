@@ -9,6 +9,7 @@ import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {NounishToken} from "./Nounish.sol";
 import {BidderFactory} from "../src/Factory.sol";
 import {Bidder} from "../src/Bidder.sol";
+import {IBidder} from "../src/IBidder.sol";
 import "forge-std/Test.sol";
 
 pragma solidity 0.8.19;
@@ -23,6 +24,7 @@ contract TestBidder is Test {
     INounsAuctionHouse public auctionHouse;
     IERC721 public token;
     BidderFactory public bidderFactory;
+    Bidder public bidderImpl;
     Bidder public autoBidder;
     Bidder public autoBidder2;
 
@@ -36,7 +38,8 @@ contract TestBidder is Test {
         token = new NounishToken();
         NounsAuctionHouse ah = new NounsAuctionHouse();
         NounsAuctionHouseProxyAdmin proxyAdmin = new NounsAuctionHouseProxyAdmin();
-        bidderFactory = new BidderFactory();
+        bidderImpl = new Bidder();
+        bidderFactory = new BidderFactory(address(bidderImpl));
 
         bytes memory initParams = abi.encodeWithSignature(
             "initialize(address,address,uint256,uint256,uint8,uint256)",
@@ -61,7 +64,7 @@ contract TestBidder is Test {
         vm.deal(owner, 100 ether);
 
         // setup and deploy auto bidder for auction house
-        Bidder.Config memory cfg = Bidder.Config({
+        IBidder.Config memory cfg = IBidder.Config({
             maxBid: 20 ether,
             minBid: 0.1 ether,
             bidWindow: BID_WINDOW,
@@ -70,14 +73,14 @@ contract TestBidder is Test {
         });
 
         autoBidder =
-            Bidder(payable(bidderFactory.deploy{value: 100 ether}(address(token), address(auctionHouse), owner, cfg)));
+            Bidder(payable(bidderFactory.clone{value: 100 ether}(address(token), address(auctionHouse), owner, cfg)));
 
         // setup second autobidder
-        Bidder.Config memory cfg2 =
-            Bidder.Config({maxBid: 20 ether, minBid: 0 ether, bidWindow: BID_WINDOW, tip: 0.01 ether, receiver: owner});
+        IBidder.Config memory cfg2 =
+            IBidder.Config({maxBid: 20 ether, minBid: 0 ether, bidWindow: BID_WINDOW, tip: 0.01 ether, receiver: owner});
 
         autoBidder2 =
-            Bidder(payable(bidderFactory.deploy{value: 100 ether}(address(token), address(auctionHouse), owner, cfg2)));
+            Bidder(payable(bidderFactory.clone{value: 100 ether}(address(token), address(auctionHouse), owner, cfg2)));
     }
 
     // testCreateBid tests the bid function of the auto bidder
@@ -123,11 +126,7 @@ contract TestBidder is Test {
         vm.expectRevert(abi.encodeWithSignature("MaxBidExceeded()"));
         autoBidder.bid();
 
-        // should revert if auction has already ended
-        vm.warp(_getCurrentAuction().endTime + 10 minutes);
-        vm.expectRevert(abi.encodeWithSignature("AuctionEnded()"));
-        autoBidder.bid();
-
+        vm.warp(_getCurrentAuction().endTime);
         auctionHouse.settleCurrentAndCreateNewAuction();
         vm.warp(_getCurrentAuction().endTime - BID_WINDOW);
         autoBidder.bid();
@@ -135,8 +134,8 @@ contract TestBidder is Test {
         // noun id should be tId + 1 since it is second mint
         assertEq(tId + 1, _getCurrentAuction().nounId);
 
-        Bidder.LastBid memory lb = autoBidder.getLastBid(tId);
-        assertEq(lb.bidder, address(this));
+        address lb = autoBidder.getLastBidder(tId);
+        assertEq(lb, tx.origin);
 
         // should revert if autobidder is paused
         vm.warp(_getCurrentAuction().endTime);
@@ -152,6 +151,11 @@ contract TestBidder is Test {
         vm.prank(owner);
         autoBidder.unpause();
         autoBidder.bid();
+
+        // should revert if auction has already ended
+        vm.warp(_getCurrentAuction().endTime + 10 minutes);
+        vm.expectRevert(bytes("Auction expired"));
+        autoBidder2.bid();
     }
 
     // testWithdraw runs an auction and ensures that it can be withdrawn to the
@@ -160,13 +164,13 @@ contract TestBidder is Test {
         auctionHouse.unpause();
 
         // should revert if there is no bid for the token yet
-        vm.expectRevert(abi.encodeWithSelector(Bidder.NoBidFoundForToken.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(IBidder.NoBidFoundForToken.selector, 0));
         autoBidder.withdraw(0);
 
         // should revert if attempt to withdraw is before auction end time
         vm.warp(_getCurrentAuction().endTime - BID_WINDOW);
         autoBidder.bid();
-        vm.expectRevert(abi.encodeWithSignature("AuctionNotEnded()"));
+        vm.expectRevert(bytes("ERC721: transfer caller is not owner nor approved"));
         autoBidder.withdraw(0);
 
         // should revert if the autobidder did not win (it does not own token)
@@ -186,10 +190,10 @@ contract TestBidder is Test {
         vm.warp(_getCurrentAuction().endTime + 69420);
         auctionHouse.settleCurrentAndCreateNewAuction();
 
-        uint256 beforeBal = b1.balance;
-        vm.prank(b1);
+        // tips are always send to the tx origin
+        uint256 beforeBal = address(tx.origin).balance;
         autoBidder.withdraw(1);
-        uint256 afterBal = b1.balance;
+        uint256 afterBal = address(tx.origin).balance;
 
         // b1 outbid the autobidder so it should own the token
         assertEq(b1, token.ownerOf(0));
@@ -199,7 +203,7 @@ contract TestBidder is Test {
         assertEq(afterBal - beforeBal, 0.01 ether);
 
         // should revert if attempting to withdraw a token again
-        vm.expectRevert(abi.encodeWithSignature("AlreadyWithdrawn()"));
+        vm.expectRevert(bytes("ERC721: transfer caller is not owner nor approved"));
         autoBidder.withdraw(1);
 
         // should allow withdraw when paused
@@ -218,12 +222,12 @@ contract TestBidder is Test {
     }
 
     function testOwnership() public {
+        // owner is set during clone deployment in setUp()
+        assertEq(owner, autoBidder.owner());
+
         auctionHouse.unpause();
         vm.warp(_getCurrentAuction().endTime);
         auctionHouse.settleCurrentAndCreateNewAuction();
-
-        // owner is dynamically set during init in setUp()
-        assertEq(owner, autoBidder.owner());
 
         vm.prank(owner);
         autoBidder.transferOwnership(b1);
@@ -236,11 +240,15 @@ contract TestBidder is Test {
         autoBidder.withdrawBalance();
 
         // owner should be able to withdraw remaining balance
+        uint256 abBeforeBal = address(autoBidder).balance;
+        uint256 b1BeforeBal = b1.balance;
+
         vm.prank(b1);
         autoBidder.withdrawBalance();
 
         assertEq(b1, autoBidder.owner());
         assertEq(0, address(autoBidder).balance);
+        assertEq(abBeforeBal + b1BeforeBal, b1.balance);
     }
 
     function testSetConfig() public {
@@ -254,8 +262,13 @@ contract TestBidder is Test {
         // verify bids change with new config
         vm.warp(_getCurrentAuction().endTime - BID_WINDOW);
 
-        Bidder.Config memory cfg =
-            Bidder.Config({maxBid: 30 ether, minBid: 30 ether, bidWindow: BID_WINDOW, tip: 0.01 ether, receiver: owner});
+        IBidder.Config memory cfg = IBidder.Config({
+            maxBid: 30 ether,
+            minBid: 30 ether,
+            bidWindow: BID_WINDOW,
+            tip: 0.01 ether,
+            receiver: owner
+        });
 
         // should revert if caller is not owner
         vm.expectRevert(bytes("Ownable: caller is not the owner"));
@@ -279,7 +292,7 @@ contract TestBidder is Test {
         vm.prank(owner);
         autoBidder.pause();
 
-        cfg = Bidder.Config({
+        cfg = IBidder.Config({
             maxBid: 30 ether,
             minBid: 30 ether,
             bidWindow: BID_WINDOW,
@@ -420,6 +433,24 @@ contract TestBidder is Test {
         vm.prank(owner);
         autoBidder.unpause();
         autoBidder.bid();
+    }
+
+    function testShouldOnlyInitOnce() public {
+        IBidder.Config memory cfg = IBidder.Config({
+            maxBid: 30 ether,
+            minBid: 30 ether,
+            bidWindow: BID_WINDOW,
+            tip: 0.01 ether,
+            receiver: owner
+        });
+
+        // implementation should disable initializers when deployed
+        vm.expectRevert(bytes("Initializable: contract is already initialized"));
+        bidderImpl.initialize(token, auctionHouse, owner, cfg);
+
+        // bidder was initialized in setup; should revert if attempted again
+        vm.expectRevert(bytes("Initializable: contract is already initialized"));
+        autoBidder.initialize(token, auctionHouse, owner, cfg);
     }
 
     function _getCurrentAuction() internal view returns (INounsAuctionHouse.Auction memory) {
