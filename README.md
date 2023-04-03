@@ -45,7 +45,7 @@ receiver defined in the contract config and receive a tip for doing so.
 
 ### Deploying your own
 
-`Contract Address: 0xa01a4aD6aEF50C6Bd91e28e04bE92dBe9F80a27a`
+[Contract Address: 0x5a2DA0F09d65a0034F4398BdA40df4F8A79a3293](https://etherscan.io/address/0x5a2da0f09d65a0034f4398bda40df4f8a79a3293)
 
 Deploy your own Bidder by calling `clone()` and seeding it with ETH. This bidder
 can be configured with min or max bid amounts for auctions. As well as a window 
@@ -78,6 +78,21 @@ If the Bidder wins, `withdraw(nounId)` can be called after the auction is settle
 `tip`: `tip in wei`  
 `receiver`: `address to transfer tokens won at auction`
 
+## Setting an ENS reverse record
+
+Visit [app.ens.domains](https://app.ens.domains/) to create a subdomain under one of your accounts. Add an address record pointing to your deployed AutoBidder contract.
+
+Then you can call `setENSReverseRecord` on the AutoBidder passing in the ENS subdomain
+created above.
+
+![ensreverserecord.png](https://i.postimg.cc/pdrdZ2Bk/ensreverserecord.png)
+
 ## Version
 
-v0.1
+v0.2
+
+### Changelog
+
+v0.2 - Add support for ENS reverse records
+
+v0.1 - Initial release

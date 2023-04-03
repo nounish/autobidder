@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
 
-/// @title Test implementation of a Nounish NFT
-
 import {ERC721} from "nouns-contracts/base/ERC721.sol";
 import {ERC721Checkpointable} from "nouns-contracts/base/ERC721Checkpointable.sol";
 
