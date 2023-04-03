@@ -10,6 +10,7 @@ import {NounishToken} from "./Nounish.sol";
 import {BidderFactory} from "../src/Factory.sol";
 import {Bidder} from "../src/Bidder.sol";
 import {IBidder} from "../src/IBidder.sol";
+import {Resolver as ENSResolver} from "./ENSResolver.sol";
 import "forge-std/Test.sol";
 
 pragma solidity 0.8.19;
@@ -27,6 +28,8 @@ contract TestBidder is Test {
     Bidder public bidderImpl;
     Bidder public autoBidder;
     Bidder public autoBidder2;
+    address public ensResolver;
+    address public factoryOwner;
 
     address internal owner;
     address internal b1;
@@ -39,7 +42,9 @@ contract TestBidder is Test {
         NounsAuctionHouse ah = new NounsAuctionHouse();
         NounsAuctionHouseProxyAdmin proxyAdmin = new NounsAuctionHouseProxyAdmin();
         bidderImpl = new Bidder();
-        bidderFactory = new BidderFactory(address(bidderImpl));
+        ensResolver = address(new ENSResolver());
+        bidderFactory = new BidderFactory(address(bidderImpl), ensResolver);
+        factoryOwner = bidderFactory.owner();
 
         bytes memory initParams = abi.encodeWithSignature(
             "initialize(address,address,uint256,uint256,uint8,uint256)",
@@ -341,11 +346,11 @@ contract TestBidder is Test {
 
         // implementation should disable initializers when deployed
         vm.expectRevert(bytes("Initializable: contract is already initialized"));
-        bidderImpl.initialize(token, auctionHouse, owner, cfg);
+        bidderImpl.initialize(token, auctionHouse, owner, ensResolver, cfg);
 
         // bidder was initialized in setup; should revert if attempted again
         vm.expectRevert(bytes("Initializable: contract is already initialized"));
-        autoBidder.initialize(token, auctionHouse, owner, cfg);
+        autoBidder.initialize(token, auctionHouse, owner, ensResolver, cfg);
     }
 
     function testRefundAndTip() public {
@@ -389,6 +394,37 @@ contract TestBidder is Test {
         vm.roll(block.number + 1);
         vm.expectRevert();
         autoBidder.bid();
+    }
+
+    function testBidderENSResolver() public {
+        vm.expectRevert(bytes("Ownable: caller is not the owner"));
+        autoBidder.setENSReverseRecord("");
+
+        vm.expectRevert(bytes("Ownable: caller is not the owner"));
+        autoBidder.setENSResolver(address(0));
+
+        vm.prank(owner);
+        autoBidder.setENSReverseRecord("autobidder.test.eth");
+
+        vm.prank(owner);
+        autoBidder.setENSReverseRecord("");
+
+        vm.prank(owner);
+        autoBidder.setENSResolver(address(0));
+    }
+
+    function testFactoryENSResolver() public {
+        assertEq(bidderFactory.resolver(), ensResolver);
+
+        // only owner should be able to update the resolver
+        vm.expectRevert(bytes("Ownable: caller is not the owner"));
+        vm.prank(owner);
+        bidderFactory.setENSResolver(address(0));
+
+        assertEq(bidderFactory.owner(), factoryOwner);
+
+        bidderFactory.setENSResolver(address(0));
+        assertEq(bidderFactory.resolver(), address(0));
     }
 
     function _getCurrentAuction() internal view returns (INounsAuctionHouse.Auction memory) {

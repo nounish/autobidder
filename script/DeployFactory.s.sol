@@ -10,8 +10,11 @@ contract DeployFactory is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
+
         Bidder b = new Bidder();
-        new BidderFactory(address(b));
+        address ensResolver = 0x084b1c3C81545d370f3634392De611CaaBFf8148;
+        new BidderFactory(address(b), ensResolver);
+
         vm.stopBroadcast();
     }
 }

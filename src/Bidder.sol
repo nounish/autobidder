@@ -6,10 +6,14 @@ import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/security/
 import {IERC721} from "openzeppelin-contracts/token/ERC721/IERC721.sol";
 import {INounsAuctionHouse} from "./external/interfaces/INounsAuctionHouse.sol";
 import {IBidder} from "./IBidder.sol";
+import {ENSResolver} from "./ENSResolver.sol";
 
 pragma solidity 0.8.19;
 
 contract Bidder is IBidder, OwnableUpgradeable, PausableUpgradeable {
+    /// The name of this contract
+    string public constant name = "Federation AutoBidder v0.2";
+
     /// Base gas to refund
     uint256 public constant REFUND_BASE_GAS = 36000;
 
@@ -31,6 +35,9 @@ contract Bidder is IBidder, OwnableUpgradeable, PausableUpgradeable {
     /// The auction house address
     INounsAuctionHouse public auctionHouse;
 
+    // The address for the ENS resolver
+    address public ensResolver;
+
     /// The config for this bidder
     Config internal config;
 
@@ -40,7 +47,7 @@ contract Bidder is IBidder, OwnableUpgradeable, PausableUpgradeable {
     }
 
     /// Can only be called once
-    function initialize(IERC721 t, INounsAuctionHouse ah, address _owner, Config memory cfg)
+    function initialize(IERC721 t, INounsAuctionHouse ah, address _owner, address _ensResolver, Config memory cfg)
         external
         payable
         initializer
@@ -51,6 +58,7 @@ contract Bidder is IBidder, OwnableUpgradeable, PausableUpgradeable {
         token = t;
         auctionHouse = ah;
         config = cfg;
+        ensResolver = _ensResolver;
 
         if (msg.sender != _owner) {
             _transferOwnership(_owner);
@@ -126,6 +134,20 @@ contract Bidder is IBidder, OwnableUpgradeable, PausableUpgradeable {
 
         config = cfg;
         emit ConfigUpdate(cfg);
+    }
+
+    /// Claims an ENS reverse record for this contract address
+    /// To remove an existing record call this fn with an empty name
+    function setENSReverseRecord(string memory _name) external onlyOwner {
+        bytes32 node = ENSResolver(ensResolver).setName(_name);
+        emit ENSReverseRecordChanged(node, _name);
+    }
+
+    /// Sets the ENS resolver address
+    /// Default on mainnet is: 0x084b1c3C81545d370f3634392De611CaaBFf8148
+    function setENSResolver(address _resolver) external onlyOwner {
+        ensResolver = _resolver;
+        emit ENSResolverChanged(_resolver);
     }
 
     /// Locks the contract to prevent bidding

@@ -40,6 +40,12 @@ interface IBidder {
     /// Emitted when config is updated
     event ConfigUpdate(Config config);
 
+    /// Emitted when an ENS reverse record is claimed by this contract
+    event ENSReverseRecordChanged(bytes32 node, string name);
+
+    /// Emitted when the ENS resolver address is changed by the owner
+    event ENSResolverChanged(address resolver);
+
     /// The structure of the config for this bidder
     struct Config {
         /// Max bid that can be placed in an auction
@@ -54,7 +60,7 @@ interface IBidder {
         address receiver;
     }
 
-    function initialize(IERC721, INounsAuctionHouse, address, Config memory) external payable;
+    function initialize(IERC721, INounsAuctionHouse, address, address, Config memory) external payable;
 
     function bid() external returns (uint256, uint256);
 
@@ -69,4 +75,8 @@ interface IBidder {
     function setConfig(Config calldata) external;
 
     function getConfig() external view returns (Config memory);
+
+    function setENSReverseRecord(string memory) external;
+
+    function setENSResolver(address) external;
 }
